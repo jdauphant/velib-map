@@ -27,6 +27,23 @@
 			left: 50px;
 			padding: 5px;
 		}
+		.station-icon {
+			border-width: 3px;
+			border-radius: 15px;
+			text-align: center;
+			font-weight: bold;
+			border: 1px solid #666;
+			background-color: white;
+		}
+		.red-icon {
+			background-color: red;
+		}
+		.orange-icon {
+			background-color: orange;
+		}
+		.green-icon {
+			background-color: green;
+		}
 	</style>
 
 </head>
@@ -76,8 +93,23 @@
 	    // Success!
 	    var data = JSON.parse(requestStations.responseText);
 	    data.map(function(station){
-	    	var marker = L.marker(station["position"])
-	    					.bindPopup('Station '+station["name"]+'<br/>'+station["available_bikes"]+'/'+station["bike_stands"]+" bikes")
+	    	var available_bikes = station["available_bikes"];
+	    	var color;
+	    	if (available_bikes == 0) {
+	    		color = "red";
+	    	} else if (available_bikes <= 3) {
+	    		color = "orange";
+	    	} else {
+	    		color = "green";
+	    	}
+
+	    	var icon = L.divIcon({
+	    		html: station["available_bikes"]+' / '+station["bike_stands"], 
+	    		className: 'station-icon '+color+'-icon',
+	    		iconSize: [45,18]
+	    	})
+	    	var marker = L.marker(station["position"], {icon: icon})
+	    					.bindPopup('Station '+station["name"]+'<br/>'+station["available_bikes"]+' / '+station["bike_stands"]+" bikes")
 	    					.addTo(map)
 	    })
 	    
