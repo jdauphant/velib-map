@@ -22,9 +22,10 @@
 		}
 		#address {
 			width: 200px;
-		/*	position: absolute;
+			position: absolute;
 			top: 20px;
-			left: 50px; */
+			left: 50px;
+			z-index: 999;
 		}
 	</style>
 
@@ -84,8 +85,8 @@
 	};
 	requestStations.onload = handleStationsResponse
 	requestStations.send();
-// Autocompletion
 
+// Autocompletion
 	function calculateDistance(lat1, lon1, lat2, lon2) {
 	  var p = 0.017453292519943295;    // Math.PI / 180
 	  var c = Math.cos;
