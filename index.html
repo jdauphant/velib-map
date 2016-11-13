@@ -1,0 +1,133 @@
+ <!DOCTYPE html>
+ <html>
+ <head>
+	<title>Velib Map</title>
+
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.0.1/dist/leaflet.css" />
+	<link rel="stylesheet" href="https://cdn.rawgit.com/Pixabay/JavaScript-autoComplete/1.0.4/auto-complete.css" />
+	<script src="https://unpkg.com/leaflet@1.0.1/dist/leaflet.js"></script>
+	<script src="https://cdn.rawgit.com/Pixabay/JavaScript-autoComplete/1.0.4/auto-complete.min.js"></script>
+	<style type="text/css">
+		html, body { 
+			height: 100%; 
+			margin: 0; 
+			padding: 0
+		}
+		#map {
+			height: 100%;
+			display: block;
+		}
+		#address {
+			width: 200px;
+		/*	position: absolute;
+			top: 20px;
+			left: 50px; */
+		}
+	</style>
+
+</head>
+
+<body>
+<input type="text" name="address" id="address" placeholder="1 rue de la paix">
+<div id="map">
+</div>
+<script>
+	var center = [48.857419, 2.352356];
+// Map
+	var map = L.map('map', {
+		drawControl: true,
+    	center: center,
+    	zoom: 14
+	});
+
+	map.fitBounds([
+    	[48.935061, 2.215004],
+    	[48.781235, 2.468039]
+	]);
+
+	L.tileLayer(
+    	'http://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png', {
+    	attribution: '&copy; <a href="http://openstreetmap.org">OpenStreetMap</a> Contributors & <a href="http://thunderforest.com/">Thunderforest</a>',
+    	maxZoom: 18,
+    }).addTo(map);
+
+	myControl = L.control({position: 'bottomright'});
+	myControl.onAdd = function(map) {
+        this._div = L.DomUtil.create('div', 'myControl');
+        this._div.innerHTML = ''
+        return this._div;
+	}
+	myControl.addTo(map);
+	var input = document.getElementById("address")
+	L.DomEvent.disableClickPropagation(input);
+
+	var requestStations = new XMLHttpRequest();
+	requestStations.open('GET', 'http://www.veliberation.fr/velib_stations.php', true);
+
+	function handleStationsResponse() {
+	  if (requestStations.status >= 200 && requestStations.status < 400) {
+	    // Success!
+	    var data = JSON.parse(requestStations.responseText);
+	    data.map(function(station){
+	    	var marker = L.marker(station["position"])
+	    					.bindPopup('Station '+station["name"]+'<br/>'+station["available_bikes"]+'/'+station["bike_stands"]+" bikes")
+	    					.addTo(map)
+	    })
+	    
+	  } else {
+	    // We reached our target server, but it returned an error
+
+	  }
+	};
+	requestStations.onload = handleStationsResponse
+	requestStations.send();
+// Autocompletion
+
+	function calculateDistance(lat1, lon1, lat2, lon2) {
+	  var p = 0.017453292519943295;    // Math.PI / 180
+	  var c = Math.cos;
+	  var a = 0.5 - c((lat2 - lat1) * p)/2 + 
+	          c(lat1 * p) * c(lat2 * p) * 
+	          (1 - c((lon2 - lon1) * p))/2;
+
+	  return 12742 * Math.asin(Math.sqrt(a)); // 2 * R; R = 6371 km
+	}
+
+	var requestAddresses;
+	new autoComplete({
+    	selector: 'input[name="address"]',
+    	minChars: 2,
+    	source: function(term, response){
+    		try { requestAddresses.abort(); } catch(e){}
+			requestAddresses = new XMLHttpRequest();
+			requestAddresses.open('GET', 'http://api-adresse.data.gouv.fr/search/?q='+term+'&limit=10&lat=48.857419&lon=2.352356', true);
+    		requestAddresses.onload = function() {
+			  if (requestAddresses.status >= 200 && requestAddresses.status < 400) {
+			    // Success!
+			    var data = JSON.parse(requestAddresses.responseText);
+			    var features = data["features"].filter(function(feature){
+			    	var coord = feature["geometry"]["coordinates"]
+			    	var distance = calculateDistance(center[0],center[1],coord[0], coord[1])
+			    	return distance < 10000;
+			    });
+			    response(features);
+			  } else {
+			    response([]);
+			  }
+			};
+			requestAddresses.send();
+    	},
+    	renderItem: function (item, search){
+    		var coord = item["geometry"]["coordinates"]
+		    return '<div class="autocomplete-suggestion" data-val="' + item["properties"]["label"] + '" data-lat="'+coord[1]+'" data-lng="'+coord[0]+'">' + item["properties"]["label"] + '</div>';
+		},
+		onSelect: function(event, term, item){
+			map.setView([item.getAttribute("data-lat"),item.getAttribute("data-lng")], 17);
+		}
+	});
+</script>
+</body>
+</html>
