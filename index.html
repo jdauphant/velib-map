@@ -25,14 +25,14 @@
 			position: absolute;
 			top: 20px;
 			left: 50px;
-			z-index: 999;
+			padding: 5px;
 		}
 	</style>
 
 </head>
 
 <body>
-<input type="text" name="address" id="address" placeholder="1 rue de la paix">
+<input type="text" name="address" id="address" placeholder="1 rue de la paix" class="leaflet-bar leaflet-control">
 <div id="map">
 </div>
 <script>
@@ -64,6 +64,9 @@
 	myControl.addTo(map);
 	var input = document.getElementById("address")
 	L.DomEvent.disableClickPropagation(input);
+	input.onfocus = function(){
+		input.value = "";
+	};
 
 	var requestStations = new XMLHttpRequest();
 	requestStations.open('GET', 'http://www.veliberation.fr/velib_stations.php', true);
@@ -126,6 +129,7 @@
 		    return '<div class="autocomplete-suggestion" data-val="' + item["properties"]["label"] + '" data-lat="'+coord[1]+'" data-lng="'+coord[0]+'">' + item["properties"]["label"] + '</div>';
 		},
 		onSelect: function(event, term, item){
+			input.placeholder = item.getAttribute("data-val");
 			map.setView([item.getAttribute("data-lat"),item.getAttribute("data-lng")], 17);
 		}
 	});
