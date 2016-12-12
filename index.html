@@ -8,26 +8,35 @@
 
 	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.0.1/dist/leaflet.css" />
 	<link rel="stylesheet" href="https://cdn.rawgit.com/Pixabay/JavaScript-autoComplete/1.0.4/auto-complete.css" />
+	<link rel="stylesheet" href="https://opensource.keycdn.com/fontawesome/4.7.0/font-awesome.min.css" integrity="sha384-dNpIIXE8U05kAbPhy3G1cz+yZmTzA6CY8Vg/u2L9xRnHjJiAK76m2BIEaSEV+/aU" crossorigin="anonymous">
 	<script src="https://unpkg.com/leaflet@1.0.1/dist/leaflet.js"></script>
 	<script src="https://cdn.rawgit.com/Pixabay/JavaScript-autoComplete/1.0.4/auto-complete.min.js"></script>
 	<style type="text/css">
 		html, body { 
 			height: 100%; 
 			margin: 0; 
-			padding: 0
+			padding: 0;
 		}
 		#map {
 			height: 100%;
 			display: block;
 		}
-		#address {
-			width: 200px;
+		.address {
+			width: 300px;
 			position: absolute;
-			top: 20px;
-			left: 50px;
 			padding: 5px;
 		}
-		.station-icon {
+
+		#departure-address {
+			top: 5px;
+			left: 50px;
+		}
+		#destination-address {
+			top: 40px;
+			left: 50px;
+		}
+
+		.station__label {
 			border-width: 3px;
 			border-radius: 15px;
 			text-align: center;
@@ -35,33 +44,39 @@
 			border: 1px solid #666;
 			background-color: white;
 		}
-		.red-icon {
-			background-color: red;
+		.station__label--red {
+			background-color: #DE1B1B;
 		}
-		.orange-icon {
-			background-color: orange;
+		.station__label--orange {
+			background-color: #D9853B;
 		}
-		.green-icon {
-			background-color: green;
+		.station__label--green {
+			background-color: #A8CD1B;
 		}
 	</style>
 
 </head>
 
 <body>
-<input type="text" name="address" id="address" placeholder="1 rue de la paix" class="leaflet-bar leaflet-control">
 <div id="map">
+	<input type="text" id="departure-address" name="departure-address" placeholder="Departure: 1 rue de la paix" class="leaflet-bar leaflet-control address">
+	<input type="text" id="destination-address" name="destination-address" placeholder="Destination: 1 rue de la paix" class="leaflet-bar leaflet-control address">
 </div>
 <script>
 	var center = [48.857419, 2.352356];
+	var departureMarker, destinationMarker;
+	var stations = [];
+	var stationsMarkers = [];
+
 // Map
 	var map = L.map('map', {
 		drawControl: true,
     	center: center,
-    	zoom: 14
+    	zoom: 13,
+    	minZoom: 12
 	});
 
-	map.fitBounds([
+	map.setMaxBounds([
     	[48.935061, 2.215004],
     	[48.781235, 2.468039]
 	]);
@@ -72,27 +87,44 @@
     	maxZoom: 18,
     }).addTo(map);
 
-	myControl = L.control({position: 'bottomright'});
-	myControl.onAdd = function(map) {
-        this._div = L.DomUtil.create('div', 'myControl');
-        this._div.innerHTML = ''
-        return this._div;
+	var inputAddresses = document.getElementsByClassName('address');
+	for (var i = 0; i < inputAddresses.length; i++) {
+		inputAddresses[i].onfocus = function(){
+			//input.value = "";
+		};
 	}
-	myControl.addTo(map);
-	var input = document.getElementById("address")
-	L.DomEvent.disableClickPropagation(input);
-	input.onfocus = function(){
-		input.value = "";
-	};
 
-	var requestStations = new XMLHttpRequest();
-	requestStations.open('GET', 'http://www.veliberation.fr/velib_stations.php', true);
+	function removeAllStationsMarker() {
+		stationsMarkers.map(function(stationMarker){
+			map.removeLayer(stationMarker)
+		})
+		stationsMarkers = [];
+	}
 
-	function handleStationsResponse() {
-	  if (requestStations.status >= 200 && requestStations.status < 400) {
-	    // Success!
-	    var data = JSON.parse(requestStations.responseText);
-	    data.map(function(station){
+	function refreshStationsOnTheMap() {
+		removeAllStationsMarker();
+		if(departureMarker != undefined) {
+			addMarkerArround(departureMarker.getLatLng(), 1000, stationToIcon("available_bikes", "bicycle"));
+			stationsMarkers.push(
+				L.circle(departureMarker.getLatLng(), {radius: 500, fill: false}).addTo(map)
+			);
+			stationsMarkers.push(
+				L.circle(departureMarker.getLatLng(), {radius: 1000, fill: false}).addTo(map)
+			);
+		} 
+		if(destinationMarker != undefined) {	
+			addMarkerArround(destinationMarker.getLatLng(), 1000, stationToIcon("available_bike_stands", "anchor"));
+			stationsMarkers.push(
+				L.circle(destinationMarker.getLatLng(), {radius: 500, fill: false}).addTo(map)
+			);
+			stationsMarkers.push(
+				L.circle(destinationMarker.getLatLng(), {radius: 1000, fill: false}).addTo(map)
+			);
+		}
+		if(departureMarker != undefined || destinationMarker != undefined) {
+			return;
+		}
+		stations.map(function(station){
 	    	var available_bikes = station["available_bikes"];
 	    	var color;
 	    	if (available_bikes == 0) {
@@ -105,14 +137,39 @@
 
 	    	var icon = L.divIcon({
 	    		html: station["available_bikes"]+' / '+station["bike_stands"], 
-	    		className: 'station-icon '+color+'-icon',
+	    		className: 'station__label station__label--'+color,
 	    		iconSize: [45,18]
 	    	})
 	    	var marker = L.marker(station["position"], {icon: icon})
 	    					.bindPopup('Station '+station["name"]+'<br/>'+station["available_bikes"]+' / '+station["bike_stands"]+" bikes")
 	    					.addTo(map)
+			stationsMarkers.push(marker);
 	    })
-	    
+	}
+
+	function addMarkerArround(lonLat, radius, stationToIcon) {
+		stations.filter(function(station){
+			var coord = station["position"]
+			var distance = calculateDistance(lonLat["lat"],lonLat["lng"],coord["lat"], coord["lng"])
+			return distance <= radius;
+		}).map(function(station){
+			var icon = stationToIcon(station);
+			var marker = L.marker(station["position"], {icon: icon})
+	    					.bindPopup('Station '+station["name"]+'<br/>'+station["available_bikes"]+' / '+station["bike_stands"]+" bikes")
+	    					.addTo(map)
+			stationsMarkers.push(marker);
+		})
+	}
+
+
+	var requestStations = new XMLHttpRequest();
+	requestStations.open('GET', 'http://www.veliberation.fr/velib_stations.php', true);
+
+	function handleStationsResponse() {
+	  if (requestStations.status >= 200 && requestStations.status < 400) {
+	    // Success!
+	    stations = JSON.parse(requestStations.responseText);
+		refreshStationsOnTheMap();
 	  } else {
 	    // We reached our target server, but it returned an error
 
@@ -123,48 +180,105 @@
 
 // Autocompletion
 	function calculateDistance(lat1, lon1, lat2, lon2) {
-	  var p = 0.017453292519943295;    // Math.PI / 180
-	  var c = Math.cos;
-	  var a = 0.5 - c((lat2 - lat1) * p)/2 + 
-	          c(lat1 * p) * c(lat2 * p) * 
-	          (1 - c((lon2 - lon1) * p))/2;
+		function toRad(x) {
+    		return x * Math.PI / 180;
+ 		}
+	    var R = 6371000; // km
 
-	  return 12742 * Math.asin(Math.sqrt(a)); // 2 * R; R = 6371 km
+		var x1 = lat2 - lat1;
+		var dLat = toRad(x1);
+		var x2 = lon2 - lon1;
+		var dLon = toRad(x2)
+		var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+			Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+			Math.sin(dLon / 2) * Math.sin(dLon / 2);
+		var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+		var d = R * c;
+
+		return d;
 	}
+
+	function renderFeature(item, search){
+    	var coord = item["geometry"]["coordinates"]
+		return '<div class="autocomplete-suggestion" data-val="' + item["properties"]["label"] + '" data-lat="'+coord[1]+'" data-lng="'+coord[0]+'">' + item["properties"]["label"] + '</div>';
+	}
+
+	function stationToIcon(attribute, faIcon){
+		return function(station) {
+			var value = station[attribute];
+	    	var color;
+	    	if (value == 0) {
+	    		color = "red";
+	    	} else if (value <= 3) {
+	    		color = "orange";
+	    	} else {
+	    		color = "green";
+	    	}
+
+	    	return L.divIcon({
+	    		html: value+' <i class="fa fa-'+faIcon+'" aria-hidden="true"></i>', 
+	    		className: 'station__label station__label--'+color,
+	    		iconSize: [45,18]
+	    	})
+		}
+	}
+
+	function onSelectAddress(type) {
+		return function(event, term, item){
+			var coord = { lat: item.getAttribute("data-lat"), lng: item.getAttribute("data-lng") };
+			L.marker(coord)
+				.bindPopup(item.getAttribute("data-val"))
+				.addTo(map)
+			map.flyTo(coord, 17);
+			var marker = L.marker(coord);
+			if(type=="destination") {
+				try { map.removeLayer(destinationMarker); } catch(e){}
+				destinationMarker = marker;
+			} else {
+				try { map.removeLayer(departureMarker); } catch(e){}
+				departureMarker = marker;
+			}
+			marker.addTo(map)
+			refreshStationsOnTheMap();
+		}
+	}
+
+	function addressesDataSource(term, response){
+    	try { requestAddresses.abort(); } catch(e){}
+		requestAddresses = new XMLHttpRequest();
+		requestAddresses.open('GET', 'http://api-adresse.data.gouv.fr/search/?q='+term+'&limit=10&lat=48.857419&lon=2.352356', true);
+		requestAddresses.onload = function() {
+		  if (requestAddresses.status >= 200 && requestAddresses.status < 400) {
+		    // Success!
+		    var data = JSON.parse(requestAddresses.responseText);
+			var features = data["features"].filter(function(feature){
+				return true;
+			    return feature["properties"]["distance"] <= 100000;
+		    });
+		    response(features);
+		  } else {
+			response([]);
+		  }
+		};
+		requestAddresses.send();
+    }
 
 	var requestAddresses;
 	new autoComplete({
-    	selector: 'input[name="address"]',
+    	selector: 'input[name=departure-address]',
     	minChars: 2,
-    	source: function(term, response){
-    		try { requestAddresses.abort(); } catch(e){}
-			requestAddresses = new XMLHttpRequest();
-			requestAddresses.open('GET', 'http://api-adresse.data.gouv.fr/search/?q='+term+'&limit=10&lat=48.857419&lon=2.352356', true);
-    		requestAddresses.onload = function() {
-			  if (requestAddresses.status >= 200 && requestAddresses.status < 400) {
-			    // Success!
-			    var data = JSON.parse(requestAddresses.responseText);
-			    var features = data["features"].filter(function(feature){
-			    	var coord = feature["geometry"]["coordinates"]
-			    	var distance = calculateDistance(center[0],center[1],coord[0], coord[1])
-			    	return distance < 10000;
-			    });
-			    response(features);
-			  } else {
-			    response([]);
-			  }
-			};
-			requestAddresses.send();
-    	},
-    	renderItem: function (item, search){
-    		var coord = item["geometry"]["coordinates"]
-		    return '<div class="autocomplete-suggestion" data-val="' + item["properties"]["label"] + '" data-lat="'+coord[1]+'" data-lng="'+coord[0]+'">' + item["properties"]["label"] + '</div>';
-		},
-		onSelect: function(event, term, item){
-			input.placeholder = item.getAttribute("data-val");
-			map.setView([item.getAttribute("data-lat"),item.getAttribute("data-lng")], 17);
-		}
+    	source: addressesDataSource,
+    	renderItem: renderFeature,
+		onSelect: onSelectAddress("departure")
 	});
+	new autoComplete({
+    	selector: 'input[name=destination-address]',
+    	minChars: 2,
+    	source: addressesDataSource,
+    	renderItem: renderFeature,
+		onSelect: onSelectAddress("destination")
+	});
+
 </script>
 </body>
 </html>
