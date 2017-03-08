@@ -45,13 +45,17 @@
 			background-color: white;
 		}
 		.station__label--red {
-			background-color: #DE1B1B;
+			background-color: rgba(222, 27, 27, 0.7);
 		}
 		.station__label--orange {
-			background-color: #D9853B;
+			background-color: rgba(217, 133, 59, 0.7);
 		}
 		.station__label--green {
-			background-color: #A8CD1B;
+			background-color: rgba(168, 205, 27, 0.7);
+		}
+		.station__label--small {
+			 font-size: 0;
+			 opacity: 0.9;
 		}
 	</style>
 
@@ -101,6 +105,26 @@
 		stationsMarkers = [];
 	}
 
+	function refreshIconsSize() {
+		var currentZoom = map.getZoom();
+  		stationsMarkers.map(function(stationMarker){
+			var icon = stationMarker._icon
+			if (currentZoom < 14 ) {
+				icon.style.width="10px";
+				icon.style.height="10px";
+				icon.classList.add("station__label--small");
+			} else {
+				icon.style.width="42px";
+				icon.style.height="18px";
+				icon.classList.remove("station__label--small");
+			}
+		})
+	}
+
+	map.on('zoomend', function() {
+  		refreshIconsSize();
+	});
+
 	function refreshStationsOnTheMap() {
 		removeAllStationsMarker();
 		if(departureMarker != undefined) {
@@ -145,6 +169,7 @@
 	    					.addTo(map)
 			stationsMarkers.push(marker);
 	    })
+		refreshIconsSize();
 	}
 
 	function addMarkerArround(lonLat, radius, stationToIcon) {
